@@ -138,8 +138,8 @@ def login():
         if not user:
             return jsonify({'message': 'User not found.'}), 404
         if check_password_hash(user.password, auth.password):
-            token = jwt.encode({'public_id': user.public_id, 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=15)}, app.config['SECRET_KEY'], algorithm='HS256')
-            refresh = jwt.encode({'public_id': user.public_id, 'exp': datetime.datetime.utcnow() + datetime.timedelta(days=15)}, app.config['SECRET_KEY'], algorithm='HS256')
+            token = jwt.encode({'public_id': user.public_id, 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=1)}, app.config['SECRET_KEY'], algorithm='HS256')
+            refresh = jwt.encode({'public_id': user.public_id, 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=10)}, app.config['SECRET_KEY'], algorithm='HS256')
             return jsonify({'token': token, 'refresh': refresh})
     except Exception as e:
         print(e)
@@ -156,6 +156,12 @@ def register():
             return jsonify({'message': 'Invalid username. Check for any special characters that may be present.'}), 401
         if not data['password'] or re.search(r"[%\\\?\"\'~/\$\*\{\}\s]", data['password']) or len(data["password"]) < 8 or not data['password'].isascii():
             return jsonify({'message': 'Invalid password. Check for any special characters that may be present.'}), 401
+        email = User.query.filter_by(email=data['email']).first()
+        user = User.query.filter_by(username=data['username']).first()
+        if email:
+            return jsonify({'message': 'User with this email already exists.'}), 401
+        if user:
+            return jsonify({'message': 'Username is taken.'}), 401
         hashed_pw = generate_password_hash(data['password'], method='sha256')
         user = User(public_id=str(uuid.uuid4()), username=data['username'], email=data['email'], password=hashed_pw, balance=10000.00, admin=False)
         db.session.add(user)
@@ -174,14 +180,17 @@ def refresh_token(current_user):
     try:
         refresh_token = request.headers['x-refresh-token']
         if not refresh_token:
+            print("here1")
             return jsonify({'message': 'Missing refresh token.'}), 401
         try:
             jwt.decode(refresh_token, app.config['SECRET_KEY'], algorithms=['HS256'])
         except:
+            print("here2")
             return jsonify({'message': 'Invalid refresh token.'}), 401
         if not current_user:
+            print("here3")
             return jsonify({'message': 'User not found.'}), 404
-        return jsonify({'token': jwt.encode({'public_id': current_user.public_id, 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=15)}, app.config['SECRET_KEY'], algorithm='HS256'), 'refresh': jwt.encode({'public_id': current_user.public_id, 'exp': datetime.datetime.utcnow() + datetime.timedelta(days=15)}, app.config['SECRET_KEY'], algorithm='HS256')})
+        return jsonify({'token': jwt.encode({'public_id': current_user.public_id, 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=1)}, app.config['SECRET_KEY'], algorithm='HS256'), 'refresh': jwt.encode({'public_id': current_user.public_id, 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=10)}, app.config['SECRET_KEY'], algorithm='HS256')})
     except Exception as e:
         print(e)
         return jsonify({'message': "An error occurred."}), 500
@@ -245,7 +254,7 @@ def buy_stock(current_user):
         current_user.balance -= current_price * data['quantity']
         current_user.balance = round(current_user.balance, 2) # correcting potential floating point imprecision 
         if current_user.balance < 0:
-            return jsonify({'message': 'Insufficient funds!'})
+            return jsonify({'message': 'Insufficient funds!'}), 400
         db.session.commit()
     except:
         return jsonify({'message': 'Failed to commit changes to database.'}), 500
