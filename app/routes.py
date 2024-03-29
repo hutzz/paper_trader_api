@@ -217,7 +217,7 @@ def get_user_stocks(current_user):
     try:
         stocks = Stock.query.filter_by(user_id=User.query.filter_by(public_id=current_user.public_id).first().id).all()
         if not stocks:
-            return jsonify({'message': 'User has no stocks!'}), 400
+            return jsonify({'message': 'User has no stocks!'}), 200
         stock_list = []
         for stock in stocks:
             data = {}
